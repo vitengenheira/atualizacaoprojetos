@@ -29,7 +29,7 @@ def parse_potencia_numerica(texto_potencia):
     return None
 
 # --- FUNÇÃO DE ANÁLISE ---
-def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para_analise, df_tensao, df_dados_tecnicos, mapa_ligacao):
+def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para_analise, df_tensao, df_dados_tecnicos, mapa_ligacao, debug_mode=False):
     """
     Analisa os dados e retorna uma tupla (instrução, status_sugerido).
     """
@@ -40,6 +40,13 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
     tensao_info = df_tensao.loc[df_tensao["municipio"] == cidade_norm, "tensao"]
     if tensao_info.empty: return (f"ERRO: Tensão para a cidade '{cidade}' não encontrada.", "Erro de Análise")
     tensao = tensao_info.values[0]
+
+    # --- MODO DE DEPURAÇÃO ---
+    if debug_mode:
+        with st.expander("🔍 DADOS INTERNOS PARA DEPURAÇÃO"):
+            st.write(f"A procurar por Tensão: `{tensao}`")
+            st.write("Tabela de dados técnicos filtrada para esta tensão:")
+            st.dataframe(df_dados_tecnicos[df_dados_tecnicos['tensao'] == tensao])
 
     categorias_permitidas = mapa_ligacao.get(tipo_ligacao, [])
     df_faixa_encontrada = df_dados_tecnicos[
@@ -136,12 +143,10 @@ def carregar_dados_tecnicos():
         st.error("Erro: Coluna 'municipio' não encontrada.")
         return None, None, None
 
-    # --- ALTERAÇÃO PRINCIPAL: Função de parse mais robusta ---
     def parse_carga_range(range_str):
         if not isinstance(range_str, str) or range_str.strip() == '-': return 0.0, 0.0
         try:
             range_str = range_str.replace(',', '.').strip()
-            # Usa regex para dividir por qualquer tipo de traço (hífen, en-dash, etc.)
             parts = [p.strip() for p in re.split(r'[-–—]', range_str)]
             if len(parts) == 2 and parts[0] and parts[1]:
                 return float(parts[0]), float(parts[1])
@@ -207,6 +212,9 @@ if df_dados_tecnicos is not None:
     form_title = "A Editar Registo Existente" if edit_mode else "1. Adicionar Novo Registo"
     
     with st.expander(form_title, expanded=True):
+        # --- ALTERAÇÃO: Checkbox de depuração ---
+        debug_mode = st.checkbox("Ativar Modo de Depuração")
+        
         with st.form("form_registro"):
             cliente = st.text_input("CLIENTE", value=st.session_state.get('edit_Cliente', ''))
             data_envio = st.date_input("Data de Envio", value=pd.to_datetime(st.session_state.get('edit_Data_de_Envio', datetime.today())))
@@ -251,7 +259,7 @@ if df_dados_tecnicos is not None:
                     potencia_para_analise = min(pot_kit, pot_inv)
                     st.info(f"Análise considera a menor potência entre o kit ({pot_kit} kWp) e o inversor ({pot_inv} kWp): **{potencia_para_analise} kWp**")
                     
-                    instrucao, status_sugerido = gerar_instrucao_tecnica(cidade, fase, carga_instalada_kw, potencia_para_analise, df_tensao, df_dados_tecnicos, mapa_ligacao)
+                    instrucao, status_sugerido = gerar_instrucao_tecnica(cidade, fase, carga_instalada_kw, potencia_para_analise, df_tensao, df_dados_tecnicos, mapa_ligacao, debug_mode)
                     st.session_state.instrucao = instrucao
                     st.session_state.status_sugerido = status_sugerido
                     
