@@ -86,7 +86,6 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
             nova_carga_max_kw = solucao['carga_max_kw']
             novo_limite_str = solucao.get('potencia_maxima_geracao_str', 'N/A')
             
-            # --- ALTERAÇÃO: Montagem da mensagem de solução no formato direto ---
             solucao_partes = []
             titulo_solucao = "💡 **Solução Sugerida:**"
             if tipo_busca != tipo_ligacao:
@@ -177,8 +176,13 @@ if df_dados_tecnicos is not None:
     with st.form("form_registro_e_analise"):
         st.header("1. Dados para Registro")
         
+        # --- CAMPOS DE REGISTRO ---
         cliente = st.text_input("CLIENTE")
         data_envio = st.date_input("Data do Envio", value=datetime.today())
+        
+        # --- ALTERAÇÃO 1: Adicionado campo de Status ---
+        status = st.selectbox("Status do Registro", ["Atualizado", "Solicitado Mudança"])
+        
         cidade = st.text_input("Cidade")
         fase = st.selectbox("Fase da ligação", ["Monofásico", "Bifásico", "Trifásico"])
         carga_instalada_kw = st.number_input("Carga Instalada (kW)", min_value=0.0, step=0.1, format="%.2f")
@@ -236,8 +240,9 @@ if df_dados_tecnicos is not None:
         
         if salvar_btn:
             instrucao_para_salvar = st.session_state.instrucao.replace("__SEPARADOR__", "\n\n")
+            # --- ALTERAÇÃO 2: Adicionado Status ao DataFrame para salvar ---
             nova_linha = pd.DataFrame([{
-                "Cliente": cliente, "Data de Envio": data_envio, "Cidade": cidade, "Fase": fase, "Carga Instalada (kW)": carga_instalada_kw,
+                "Cliente": cliente, "Data de Envio": data_envio, "Status": status, "Cidade": cidade, "Fase": fase, "Carga Instalada (kW)": carga_instalada_kw,
                 "Kit Instalado - Potência": kit_inst_pot, "Kit Instalado - Placa": kit_inst_placa, "Kit Instalado - Inversor": kit_inst_inversor,
                 "Kit Enviado - Potência": kit_env_pot, "Kit Enviado - Placa": kit_env_placa, "Kit Enviado - Inversor": kit_env_inversor,
                 "Kit ATUAL - Potência": kit_atual_pot, "Kit ATUAL - Placa": kit_atual_placa, "Kit ATUAL - Inversor": kit_atual_inversor,
@@ -246,10 +251,32 @@ if df_dados_tecnicos is not None:
             salvar_dados_csv(nova_linha)
             st.session_state.instrucao = ""
 
+# --- Visualização do Histórico ---
 if os.path.exists("atualizacoes_projetos.csv"):
     st.divider()
     st.header("📋 Histórico de Atualizações")
     df_historico = pd.read_csv("atualizacoes_projetos.csv")
-    st.dataframe(df_historico)
+
+    # --- ALTERAÇÃO 3: Melhoria da visualização com filtro e data_editor ---
+    # Garante que a coluna Status exista para evitar erros em arquivos antigos
+    if 'Status' not in df_historico.columns:
+        df_historico['Status'] = 'N/A'
+    
+    # Filtro de Status
+    status_options = df_historico["Status"].unique()
+    status_filter = st.multiselect(
+        "Filtrar por Status:",
+        options=status_options,
+        default=list(status_options)
+    )
+    
+    # Aplica o filtro
+    if status_filter:
+        df_filtrado = df_historico[df_historico["Status"].isin(status_filter)]
+    else:
+        df_filtrado = df_historico.head(0) # Mostra um dataframe vazio se nada for selecionado
+
+    # Usa o data_editor para uma visualização interativa
+    st.data_editor(df_filtrado, use_container_width=True, hide_index=True)
 
 st.caption("Desenvolvido por Vitória de Sales Sena ⚡")
