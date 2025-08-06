@@ -127,7 +127,6 @@ def carregar_dados_tecnicos():
         if 'tensao' in df.columns:
             df['tensao'] = df['tensao'].astype(str).str.strip()
             df['tensao'] = df['tensao'].apply(standardize_voltage)
-        # --- ALTERAÇÃO PRINCIPAL: Limpa também a coluna 'categoria' ---
         if 'categoria' in df.columns:
             df['categoria'] = df['categoria'].astype(str).str.strip()
 
@@ -137,21 +136,30 @@ def carregar_dados_tecnicos():
         st.error("Erro: Coluna 'municipio' não encontrada.")
         return None, None, None
 
+    # --- ALTERAÇÃO PRINCIPAL: Função de parse mais robusta ---
     def parse_carga_range(range_str):
         if not isinstance(range_str, str) or range_str.strip() == '-': return 0.0, 0.0
         try:
             range_str = range_str.replace(',', '.').strip()
-            parts = [p.strip() for p in range_str.split('-')]
-            if len(parts) == 2: return float(parts[0]), float(parts[1])
-            elif len(parts) == 1 and parts[0]: val = float(parts[0]); return val, val
-            else: return 0.0, 0.0
-        except: return 0.0, 0.0
+            # Usa regex para dividir por qualquer tipo de traço (hífen, en-dash, etc.)
+            parts = [p.strip() for p in re.split(r'[-–—]', range_str)]
+            if len(parts) == 2 and parts[0] and parts[1]:
+                return float(parts[0]), float(parts[1])
+            elif len(parts) == 1 and parts[0]:
+                val = float(parts[0])
+                return val, val
+            else:
+                return 0.0, 0.0
+        except:
+            return 0.0, 0.0
+            
     if 'carga_instalada' in df_disjuntores.columns:
         cargas = df_disjuntores['carga_instalada'].apply(parse_carga_range)
         df_disjuntores[['carga_min_kw', 'carga_max_kw']] = pd.DataFrame(cargas.tolist(), index=df_disjuntores.index)
     else:
         st.error("Erro: Coluna 'carga_instalada' não encontrada.")
         return None, None, None
+        
     df_dados_tecnicos = pd.merge(df_disjuntores, df_potencia_max, on=['tensao', 'categoria'], how='left')
     coluna_pot = [col for col in df_dados_tecnicos.columns if 'potencia_maxima' in col]
     if coluna_pot:
