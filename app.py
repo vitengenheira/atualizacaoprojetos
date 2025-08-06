@@ -182,7 +182,7 @@ def salvar_dados_csv(dados, nome_arquivo="atualizacoes_projetos.csv"):
 
 
 # --- Início da Interface do App ---
-st.title("🔄 Atualização de Projeto - 77 COS")
+st.title("🔄 Atualização de Projeto")
 st.markdown("Preencha as informações abaixo para registrar uma atualização de projeto.")
 
 # Carregar dados técnicos
@@ -231,7 +231,7 @@ if df_dados_tecnicos is not None: # Só mostra o formulário se os dados técnic
         st.divider()
 
         # --- NOVA SEÇÃO DE ANÁLISE ---
-        st.subheader("🔎 Análise de Viabilidade e Geração de Observação")
+        st.subheader("🔎 Análise de Viabilidade de Atualização")
         st.info("Preencha os campos `Cidade`, `Fase`, `Carga Instalada` e `Kit Atual - Potência` e clique no botão abaixo para gerar a observação técnica automaticamente.")
 
         # Botão de análise que atualiza o session state
