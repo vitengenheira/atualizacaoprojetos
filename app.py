@@ -53,11 +53,13 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
 
     resultado_atual = df_faixa_encontrada.iloc[0]
     limite_atual = resultado_atual["limite_numerico_busca"]
-    faixa_atual = resultado_atual["categoria"] # Captura a faixa atual
+    faixa_atual = resultado_atual["categoria"]
+    # --- ALTERAÇÃO: Captura o limite como texto para exibição ---
+    limite_atual_str = str(resultado_atual.get('potencia_maxima_geracao_str', 'N/A'))
 
     if limite_atual is None or potencia_kit_kwp <= limite_atual:
-        # --- ALTERAÇÃO 1: Adiciona a faixa atual na mensagem de sucesso ---
-        return f"O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual})."
+        # Adiciona a faixa e o limite na mensagem de sucesso
+        return f"O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual}), que possui um limite de {limite_atual_str}."
 
     tipos_de_busca = ["Monofásico", "Bifásico", "Trifásico"]
     try:
@@ -84,8 +86,8 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
             partes_alteracao.append(f"AUMENTAR CARGA PARA NO MÍNIMO {nova_carga_min_w} W")
             
             alteracao_necessaria = " e ".join(partes_alteracao)
-            # --- ALTERAÇÃO 2: Adiciona a faixa atual na mensagem de alteração ---
-            return f"O cliente não está mais dentro da faixa atual ({faixa_atual}). Alteração necessária: {alteracao_necessaria}."
+            # Adiciona a faixa e o limite na mensagem de alteração
+            return f"O cliente não está mais dentro da faixa atual ({faixa_atual}), que tem um limite de {limite_atual_str}. Alteração necessária: {alteracao_necessaria}."
             
     return f"NÃO FOI ENCONTRADA SOLUÇÃO para um kit de {potencia_kit_kwp} kWp com a tensão de {tensao}."
 
