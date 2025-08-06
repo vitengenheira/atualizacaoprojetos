@@ -49,7 +49,6 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
         (carga_instalada <= df_dados_tecnicos["carga_max_kw"])
     ]
 
-    # --- ALTERAÇÃO: Mensagem de erro mais detalhada ---
     if df_faixa_encontrada.empty: return (f"ERRO: Nenhuma faixa encontrada para os dados atuais (Tensão: {tensao}, Carga: {carga_instalada}kW, Ligação: {tipo_ligacao}). Verifique se os arquivos CSV contêm uma categoria correspondente.", "Erro de Análise")
 
     resultado_atual = df_faixa_encontrada.iloc[0]
@@ -89,7 +88,7 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
                 solucao_partes.append(titulo_solucao)
                 solucao_partes.append(f"1. **Solicitar à concessionária a alteração para Ligação {tipo_busca}**.")
                 solucao_partes.append(f"2. **Adequar a Carga Instalada** para a faixa entre {nova_carga_min_kw:.2f} kW e {nova_carga_max_kw:.2f} kW (correspondente à nova categoria `{nova_faixa}`).")
-            else: # Mesmo tipo de ligação, só muda a categoria
+            else: 
                 titulo_solucao = "💡 **Solução Sugerida:**"
                 solucao_partes.append(titulo_solucao)
                 solucao_partes.append(f"1. **Mudar a categoria do projeto para `{nova_faixa}`**.")
@@ -113,17 +112,13 @@ def carregar_dados_tecnicos():
         st.error(f"Erro: O ficheiro `{e.filename}` não foi encontrado.")
         return None, None, None
 
-    # --- ALTERAÇÃO PRINCIPAL: Padroniza a tensão em todos os ficheiros ---
     def standardize_voltage(v_str):
         if isinstance(v_str, str) and '/' in v_str:
             try:
-                # Remove anything that isn't a digit or a slash.
                 cleaned_str = re.sub(r'[^\d/]', '', v_str)
-                # Split, convert to int, sort descending.
                 parts = sorted([int(p) for p in cleaned_str.split('/')], reverse=True)
                 return f"{parts[0]}/{parts[1]}"
             except (ValueError, IndexError):
-                # If conversion fails, return the original cleaned string
                 return v_str.strip().replace('V','').replace('v','')
         return v_str
 
@@ -132,6 +127,9 @@ def carregar_dados_tecnicos():
         if 'tensao' in df.columns:
             df['tensao'] = df['tensao'].astype(str).str.strip()
             df['tensao'] = df['tensao'].apply(standardize_voltage)
+        # --- ALTERAÇÃO PRINCIPAL: Limpa também a coluna 'categoria' ---
+        if 'categoria' in df.columns:
+            df['categoria'] = df['categoria'].astype(str).str.strip()
 
     if 'municipio' in df_tensao.columns:
         df_tensao['municipio'] = df_tensao['municipio'].str.strip().apply(padronizar_nome)
@@ -170,7 +168,6 @@ def load_record_for_edit(df, index):
     record = df.loc[index].to_dict()
     st.session_state.edit_index = index
     for key, value in record.items():
-        # Converte o nome da coluna para uma chave de estado válida
         state_key = f'edit_{re.sub(r"[^a-zA-Z0-9_]", "", key.replace(" ", "_"))}'
         st.session_state[state_key] = value
 
@@ -198,13 +195,11 @@ if 'status_sugerido' not in st.session_state:
 df_tensao, df_dados_tecnicos, mapa_ligacao = carregar_dados_tecnicos()
 
 if df_dados_tecnicos is not None:
-    # Determina o modo (edição ou novo)
     edit_mode = st.session_state.edit_index is not None
     form_title = "A Editar Registo Existente" if edit_mode else "1. Adicionar Novo Registo"
     
     with st.expander(form_title, expanded=True):
         with st.form("form_registro"):
-            # --- CAMPOS DE REGISTO (agora preenchidos pelo estado da sessão) ---
             cliente = st.text_input("CLIENTE", value=st.session_state.get('edit_Cliente', ''))
             data_envio = st.date_input("Data de Envio", value=pd.to_datetime(st.session_state.get('edit_Data_de_Envio', datetime.today())))
             cidade = st.text_input("Cidade", value=st.session_state.get('edit_Cidade', ''))
@@ -234,7 +229,6 @@ if df_dados_tecnicos is not None:
             st.divider()
             comentario_notion = st.text_area("Comentário do Notion", value=st.session_state.get('edit_Comentário_Notion', ''))
             
-            # --- Análise e Ação ---
             st.subheader("2. Análise e Ação")
             
             submitted = st.form_submit_button("Analisar e Salvar", use_container_width=True, type="primary")
@@ -273,7 +267,6 @@ if df_dados_tecnicos is not None:
                     df_historico.to_csv("atualizacoes_projetos.csv", index=False)
                     st.rerun()
 
-    # --- Exibição dos resultados fora do formulário ---
     if st.session_state.instrucao:
         instrucao = st.session_state.instrucao
         if "ERRO" in instrucao: st.error(instrucao)
@@ -359,4 +352,3 @@ else:
     st.info("Nenhum registo encontrado. Adicione um novo registo no formulário acima.")
 
 st.caption("Desenvolvido por Vitória de Sales Sena ⚡")
-
