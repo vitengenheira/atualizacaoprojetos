@@ -56,9 +56,10 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
     faixa_atual = resultado_atual["categoria"]
     limite_atual_str = str(resultado_atual.get('potencia_maxima_geracao_str', 'N/A'))
 
-    # CORREÇÃO: Verifica se o limite é um número válido. pd.isna trata None e NaN.
+    # --- ALTERAÇÃO PRINCIPAL: Diagnóstico de erro mais claro ---
+    # Verifica se o limite é um número válido. pd.isna trata None e NaN.
     if pd.isna(limite_atual):
-        return f"O projeto pode ser atualizado. A faixa atual ({faixa_atual}) não possui um limite de potência definido."
+        return f"ERRO DE DADOS: Não foi possível ler o limite de potência para a faixa '{faixa_atual}' a partir do arquivo CSV. O valor encontrado foi '{limite_atual_str}'. Por favor, corrija o arquivo `tabela_potencia_maxima.csv` para que contenha um número válido (ex: 8.8)."
 
     if potencia_kit_kwp <= limite_atual:
         return f"O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual}), que possui um limite de {limite_atual_str}."
@@ -82,7 +83,6 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
             solucao = df_solucao.iloc[0]
             nova_faixa, nova_carga_min_w = solucao['categoria'], int(solucao['carga_min_kw'] * 1000)
             
-            # --- ALTERAÇÃO: Formato de saída direto como solicitado ---
             instrucoes = []
             if tipo_busca != tipo_ligacao:
                 instrucoes.append(f"ANTES DE ENVIAR, MUDAR LIGAÇÃO PARA {tipo_busca.upper()}")
