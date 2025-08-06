@@ -49,7 +49,8 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
         (carga_instalada <= df_dados_tecnicos["carga_max_kw"])
     ]
 
-    if df_faixa_encontrada.empty: return (f"ERRO: Nenhuma faixa encontrada para os dados atuais (Carga: {carga_instalada}kW, Ligação: {tipo_ligacao}).", "Erro de Análise")
+    # --- ALTERAÇÃO: Mensagem de erro mais detalhada ---
+    if df_faixa_encontrada.empty: return (f"ERRO: Nenhuma faixa encontrada para os dados atuais (Tensão: {tensao}, Carga: {carga_instalada}kW, Ligação: {tipo_ligacao}). Verifique se os arquivos CSV contêm uma categoria correspondente.", "Erro de Análise")
 
     resultado_atual = df_faixa_encontrada.iloc[0]
     limite_atual = resultado_atual["limite_numerico_busca"]
@@ -82,7 +83,6 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
             solucao = df_solucao.iloc[0]
             nova_faixa, nova_carga_min_kw, nova_carga_max_kw, novo_limite_str = solucao['categoria'], solucao['carga_min_kw'], solucao['carga_max_kw'], solucao.get('potencia_maxima_geracao_str', 'N/A')
             
-            # --- ALTERAÇÃO: Formato da mensagem de solução mais claro e acionável ---
             solucao_partes = []
             if tipo_busca != tipo_ligacao:
                 titulo_solucao = f"💡 **Solução Sugerida (com upgrade de ligação):**"
@@ -105,7 +105,6 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
 # --- Carregamento de Dados ---
 @st.cache_data
 def carregar_dados_tecnicos():
-    # ... (código de carregamento de dados permanece o mesmo)
     try:
         df_tensao = pd.read_csv("municipios_tensao.csv", sep=r'\s*,\s*', engine='python')
         df_disjuntores = pd.read_csv("tabela_disjuntores.csv", sep=r'\s*,\s*', engine='python')
@@ -113,15 +112,33 @@ def carregar_dados_tecnicos():
     except FileNotFoundError as e:
         st.error(f"Erro: O arquivo `{e.filename}` não foi encontrado.")
         return None, None, None
+
+    # --- ALTERAÇÃO PRINCIPAL: Padroniza a tensão em todos os arquivos ---
+    def standardize_voltage(v_str):
+        if isinstance(v_str, str) and '/' in v_str:
+            try:
+                # Remove anything that isn't a digit or a slash.
+                cleaned_str = re.sub(r'[^\d/]', '', v_str)
+                # Split, convert to int, sort descending.
+                parts = sorted([int(p) for p in cleaned_str.split('/')], reverse=True)
+                return f"{parts[0]}/{parts[1]}"
+            except (ValueError, IndexError):
+                # If conversion fails, return the original cleaned string
+                return v_str.strip().replace('V','').replace('v','')
+        return v_str
+
     for df in [df_tensao, df_disjuntores, df_potencia_max]:
         df.columns = [padronizar_nome(col) for col in df.columns]
         if 'tensao' in df.columns:
-            df['tensao'] = df['tensao'].astype(str).str.strip().str.replace('V$', '', regex=True)
+            df['tensao'] = df['tensao'].astype(str).str.strip()
+            df['tensao'] = df['tensao'].apply(standardize_voltage)
+
     if 'municipio' in df_tensao.columns:
         df_tensao['municipio'] = df_tensao['municipio'].str.strip().apply(padronizar_nome)
     else:
         st.error("Erro: Coluna 'municipio' não encontrada.")
         return None, None, None
+
     def parse_carga_range(range_str):
         if not isinstance(range_str, str) or range_str.strip() == '-': return 0.0, 0.0
         try:
