@@ -99,6 +99,16 @@ def carregar_dados_tecnicos():
 
     for df in [df_tensao, df_disjuntores, df_potencia_max]:
         df.columns = [padronizar_nome(col) for col in df.columns]
+
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Padroniza os nomes dos municípios no DataFrame para busca case-insensitive
+    if 'municipio' in df_tensao.columns:
+        df_tensao['municipio'] = df_tensao['municipio'].str.strip().apply(padronizar_nome)
+    else:
+        st.error("Erro: Coluna 'municipio' não encontrada em `municipios_tensao.csv`.")
+        return None, None, None
+    # --- FIM DA CORREÇÃO ---
+
     if 'tensao' in df_tensao.columns: df_tensao['tensao'] = df_tensao['tensao'].astype(str).str.strip().str.replace('V$', '', regex=True)
     if 'tensao' in df_disjuntores.columns: df_disjuntores['tensao'] = df_disjuntores['tensao'].astype(str).str.strip().str.replace('V$', '', regex=True)
 
