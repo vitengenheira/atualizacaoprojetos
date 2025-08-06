@@ -43,7 +43,7 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
 
     # --- MODO DE DEPURAÇÃO ---
     if debug_mode:
-        with st.expander("🔍 DADOS INTERNOS PARA DEPURAÇÃO"):
+        with st.expander("� DADOS INTERNOS PARA DEPURAÇÃO"):
             st.write(f"A procurar por Tensão: `{tensao}`")
             st.write("Tabela de dados técnicos filtrada para esta tensão:")
             st.dataframe(df_dados_tecnicos[df_dados_tecnicos['tensao'] == tensao])
@@ -212,7 +212,6 @@ if df_dados_tecnicos is not None:
     form_title = "A Editar Registo Existente" if edit_mode else "1. Adicionar Novo Registo"
     
     with st.expander(form_title, expanded=True):
-        # --- ALTERAÇÃO: Checkbox de depuração ---
         debug_mode = st.checkbox("Ativar Modo de Depuração")
         
         with st.form("form_registro"):
