@@ -110,10 +110,10 @@ def carregar_dados_tecnicos():
         df_disjuntores = pd.read_csv("tabela_disjuntores.csv", sep=r'\s*,\s*', engine='python')
         df_potencia_max = pd.read_csv("tabela_potencia_maxima.csv", sep=r'\s*,\s*', engine='python')
     except FileNotFoundError as e:
-        st.error(f"Erro: O arquivo `{e.filename}` não foi encontrado.")
+        st.error(f"Erro: O ficheiro `{e.filename}` não foi encontrado.")
         return None, None, None
 
-    # --- ALTERAÇÃO PRINCIPAL: Padroniza a tensão em todos os arquivos ---
+    # --- ALTERAÇÃO PRINCIPAL: Padroniza a tensão em todos os ficheiros ---
     def standardize_voltage(v_str):
         if isinstance(v_str, str) and '/' in v_str:
             try:
@@ -200,13 +200,13 @@ df_tensao, df_dados_tecnicos, mapa_ligacao = carregar_dados_tecnicos()
 if df_dados_tecnicos is not None:
     # Determina o modo (edição ou novo)
     edit_mode = st.session_state.edit_index is not None
-    form_title = "Editando Registro Existente" if edit_mode else "1. Adicionar Novo Registro"
+    form_title = "A Editar Registo Existente" if edit_mode else "1. Adicionar Novo Registo"
     
     with st.expander(form_title, expanded=True):
         with st.form("form_registro"):
-            # --- CAMPOS DE REGISTRO (agora preenchidos pelo estado da sessão) ---
+            # --- CAMPOS DE REGISTO (agora preenchidos pelo estado da sessão) ---
             cliente = st.text_input("CLIENTE", value=st.session_state.get('edit_Cliente', ''))
-            data_envio = st.date_input("Data do Envio", value=pd.to_datetime(st.session_state.get('edit_Data_de_Envio', datetime.today())))
+            data_envio = st.date_input("Data de Envio", value=pd.to_datetime(st.session_state.get('edit_Data_de_Envio', datetime.today())))
             cidade = st.text_input("Cidade", value=st.session_state.get('edit_Cidade', ''))
             fase_options = ["Monofásico", "Bifásico", "Trifásico"]
             fase_index = fase_options.index(st.session_state.get('edit_Fase', 'Monofásico'))
@@ -265,10 +265,10 @@ if df_dados_tecnicos is not None:
 
                     if edit_mode:
                         df_historico.loc[st.session_state.edit_index] = novo_registro
-                        st.success("Registro atualizado com sucesso!")
+                        st.success("Registo atualizado com sucesso!")
                     else:
                         df_historico = pd.concat([df_historico, pd.DataFrame([novo_registro])], ignore_index=True)
-                        st.success("Novo registro salvo com sucesso!")
+                        st.success("Novo registo salvo com sucesso!")
                     
                     df_historico.to_csv("atualizacoes_projetos.csv", index=False)
                     st.rerun()
@@ -299,7 +299,7 @@ if os.path.exists("atualizacoes_projetos.csv"):
         status_filter = st.selectbox("Filtrar por Status:", options=status_options)
     with col_clear:
         st.write("") # Espaçamento
-        if st.button("Limpar Formulário / Novo Registro", use_container_width=True):
+        if st.button("Limpar Formulário / Novo Registo", use_container_width=True):
             clear_form()
             st.rerun()
 
@@ -356,6 +356,7 @@ if os.path.exists("atualizacoes_projetos.csv"):
             else:
                 st.success(instrucao_texto)
 else:
-    st.info("Nenhum registro encontrado. Adicione um novo registro no formulário acima.")
+    st.info("Nenhum registo encontrado. Adicione um novo registo no formulário acima.")
 
 st.caption("Desenvolvido por Vitória de Sales Sena ⚡")
+
