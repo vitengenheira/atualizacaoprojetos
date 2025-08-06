@@ -146,7 +146,9 @@ def load_record_for_edit(df, index):
     record = df.loc[index].to_dict()
     st.session_state.edit_index = index
     for key, value in record.items():
-        st.session_state[f'edit_{key}'] = value
+        # Converte o nome da coluna para uma chave de estado válida
+        state_key = f'edit_{re.sub(r"[^a-zA-Z0-9_]", "", key.replace(" ", "_"))}'
+        st.session_state[state_key] = value
 
 def clear_form():
     st.session_state.edit_index = None
@@ -175,35 +177,39 @@ if df_dados_tecnicos is not None:
         with st.form("form_registro"):
             # --- CAMPOS DE REGISTRO (agora preenchidos pelo estado da sessão) ---
             cliente = st.text_input("CLIENTE", value=st.session_state.get('edit_Cliente', ''))
-            data_envio = st.date_input("Data do Envio", value=pd.to_datetime(st.session_state.get('edit_Data de Envio', datetime.today())))
+            data_envio = st.date_input("Data do Envio", value=pd.to_datetime(st.session_state.get('edit_Data_de_Envio', datetime.today())))
             cidade = st.text_input("Cidade", value=st.session_state.get('edit_Cidade', ''))
-            fase = st.selectbox("Fase da ligação", ["Monofásico", "Bifásico", "Trifásico"], index=["Monofásico", "Bifásico", "Trifásico"].index(st.session_state.get('edit_Fase', 'Monofásico')))
-            carga_instalada_kw = st.number_input("Carga Instalada (kW)", min_value=0.0, step=0.1, format="%.2f", value=st.session_state.get('edit_Carga Instalada (kW)', 0.0))
+            fase_options = ["Monofásico", "Bifásico", "Trifásico"]
+            fase_index = fase_options.index(st.session_state.get('edit_Fase', 'Monofásico'))
+            fase = st.selectbox("Fase da ligação", fase_options, index=fase_index)
+            carga_instalada_kw = st.number_input("Carga Instalada (kW)", min_value=0.0, step=0.1, format="%.2f", value=st.session_state.get('edit_Carga_Instalada_kW', 0.0))
 
             st.divider()
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.subheader("Kit Instalado")
-                kit_inst_pot = st.text_input("POTÊNCIA", key="inst_pot", value=st.session_state.get('edit_Kit Instalado - Potência', ''))
-                kit_inst_placa = st.text_input("PLACA", key="inst_placa", value=st.session_state.get('edit_Kit Instalado - Placa', ''))
-                kit_inst_inversor = st.text_input("INVERSOR", key="inst_inv", value=st.session_state.get('edit_Kit Instalado - Inversor', ''))
+                kit_inst_pot = st.text_input("POTÊNCIA", key="inst_pot", value=st.session_state.get('edit_Kit_Instalado_-_Potência', ''))
+                kit_inst_placa = st.text_input("PLACA", key="inst_placa", value=st.session_state.get('edit_Kit_Instalado_-_Placa', ''))
+                kit_inst_inversor = st.text_input("INVERSOR", key="inst_inv", value=st.session_state.get('edit_Kit_Instalado_-_Inversor', ''))
             with col2:
                 st.subheader("Kit Enviado")
-                kit_env_pot = st.text_input("POTÊNCIA", key="env_pot", value=st.session_state.get('edit_Kit Enviado - Potência', ''))
-                kit_env_placa = st.text_input("PLACA", key="env_placa", value=st.session_state.get('edit_Kit Enviado - Placa', ''))
-                kit_env_inversor = st.text_input("INVERSOR", key="env_inv", value=st.session_state.get('edit_Kit Enviado - Inversor', ''))
+                kit_env_pot = st.text_input("POTÊNCIA", key="env_pot", value=st.session_state.get('edit_Kit_Enviado_-_Potência', ''))
+                kit_env_placa = st.text_input("PLACA", key="env_placa", value=st.session_state.get('edit_Kit_Enviado_-_Placa', ''))
+                kit_env_inversor = st.text_input("INVERSOR", key="env_inv", value=st.session_state.get('edit_Kit_Enviado_-_Inversor', ''))
             with col3:
                 st.subheader("Kit ATUAL Instalado")
-                kit_atual_pot = st.text_input("POTÊNCIA", key="atual_pot", value=st.session_state.get('edit_Kit ATUAL - Potência', ''))
-                kit_atual_placa = st.text_input("PLACA", key="atual_placa", value=st.session_state.get('edit_Kit ATUAL - Placa', ''))
-                kit_atual_inversor = st.text_input("INVERSOR", key="atual_inv", value=st.session_state.get('edit_Kit ATUAL - Inversor', ''))
+                kit_atual_pot = st.text_input("POTÊNCIA", key="atual_pot", value=st.session_state.get('edit_Kit_ATUAL_-_Potência', ''))
+                kit_atual_placa = st.text_input("PLACA", key="atual_placa", value=st.session_state.get('edit_Kit_ATUAL_-_Placa', ''))
+                kit_atual_inversor = st.text_input("INVERSOR", key="atual_inv", value=st.session_state.get('edit_Kit_ATUAL_-_Inversor', ''))
             
             st.divider()
-            comentario_notion = st.text_area("Comentário do Notion", value=st.session_state.get('edit_Comentário Notion', ''))
+            comentario_notion = st.text_area("Comentário do Notion", value=st.session_state.get('edit_Comentário_Notion', ''))
             
             # --- Análise e Ação ---
             st.subheader("2. Análise e Ação")
-            status_acao = st.selectbox("Status / Ação", ["", "Enviar atualização", "Solicitar mudança", "Atualizado"], index=["", "Enviar atualização", "Solicitar mudança", "Atualizado"].index(st.session_state.get('edit_Status', '')))
+            status_options = ["", "Enviar atualização", "Solicitar mudança", "Atualizado"]
+            status_index = status_options.index(st.session_state.get('edit_Status', ''))
+            status_acao = st.selectbox("Status / Ação", status_options, index=status_index)
             
             submitted = st.form_submit_button("Analisar e Salvar", use_container_width=True, type="primary")
 
@@ -271,12 +277,58 @@ if os.path.exists("atualizacoes_projetos.csv"):
 
     df_filtrado = df_historico if status_filter == "Todos" else df_historico[df_historico["Status"] == status_filter]
 
+    # --- ALTERAÇÃO: Nova visualização com st.expander ---
     for index, row in df_filtrado.iterrows():
-        cols = st.columns([4, 2, 1])
-        cols[0].markdown(f"**{row.get('Cliente', 'N/A')}**")
-        cols[1].markdown(f"Status: **{row.get('Status', 'N/A')}**")
-        cols[2].button("Carregar para Edição", key=f"edit_{index}", on_click=load_record_for_edit, args=(df_historico, index))
-
+        cliente_nome = str(row.get("Cliente", "N/A"))
+        status_valor = str(row.get("Status", "N/A"))
+        
+        expander_title = f"{cliente_nome}  |  Status: {status_valor}"
+        
+        with st.expander(expander_title):
+            # Botão de edição dentro do expander
+            st.button("Carregar para Edição", key=f"edit_{index}", on_click=load_record_for_edit, args=(df_historico, index))
+            
+            st.markdown(f"**Data de Envio:** {row.get('Data de Envio', 'N/A')}")
+            st.markdown(f"**Cidade:** {row.get('Cidade', 'N/A')}")
+            st.markdown(f"**Fase:** {row.get('Fase', 'N/A')}")
+            st.markdown(f"**Carga Instalada (kW):** {row.get('Carga Instalada (kW)', 'N/A')}")
+            
+            st.divider()
+            
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown("**Kit Instalado**")
+                st.text(f"Potência: {row.get('Kit Instalado - Potência', 'N/A')}")
+                st.text(f"Placa: {row.get('Kit Instalado - Placa', 'N/A')}")
+                st.text(f"Inversor: {row.get('Kit Instalado - Inversor', 'N/A')}")
+            with c2:
+                st.markdown("**Kit Enviado**")
+                st.text(f"Potência: {row.get('Kit Enviado - Potência', 'N/A')}")
+                st.text(f"Placa: {row.get('Kit Enviado - Placa', 'N/A')}")
+                st.text(f"Inversor: {row.get('Kit Enviado - Inversor', 'N/A')}")
+            with c3:
+                st.markdown("**Kit ATUAL Instalado**")
+                st.text(f"Potência: {row.get('Kit ATUAL - Potência', 'N/A')}")
+                st.text(f"Placa: {row.get('Kit ATUAL - Placa', 'N/A')}")
+                st.text(f"Inversor: {row.get('Kit ATUAL - Inversor', 'N/A')}")
+            
+            st.divider()
+            
+            st.markdown("**Comentário do Notion:**")
+            st.text(row.get('Comentário Notion', ''))
+            
+            st.markdown("**Instrução da Análise:**")
+            instrucao_texto = str(row.get('Instrução da Análise', ''))
+            
+            if "ERRO" in instrucao_texto:
+                st.error(instrucao_texto)
+            elif "REPROVADO" in instrucao_texto:
+                partes = instrucao_texto.split("\n\n")
+                st.warning(partes[0])
+                if len(partes) > 1:
+                    st.info("\n\n".join(partes[1:]))
+            else:
+                st.success(instrucao_texto)
 else:
     st.info("Nenhum registro encontrado. Adicione um novo registro no formulário acima.")
 
