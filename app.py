@@ -53,9 +53,11 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
 
     resultado_atual = df_faixa_encontrada.iloc[0]
     limite_atual = resultado_atual["limite_numerico_busca"]
+    faixa_atual = resultado_atual["categoria"] # Captura a faixa atual
 
     if limite_atual is None or potencia_kit_kwp <= limite_atual:
-        return "O projeto pode ser atualizado. O cliente ainda se mantém dentro da faixa."
+        # --- ALTERAÇÃO 1: Adiciona a faixa atual na mensagem de sucesso ---
+        return f"O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual})."
 
     tipos_de_busca = ["Monofásico", "Bifásico", "Trifásico"]
     try:
@@ -82,7 +84,8 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
             partes_alteracao.append(f"AUMENTAR CARGA PARA NO MÍNIMO {nova_carga_min_w} W")
             
             alteracao_necessaria = " e ".join(partes_alteracao)
-            return f"O cliente não está mais dentro da faixa. Alteração necessária: {alteracao_necessaria}."
+            # --- ALTERAÇÃO 2: Adiciona a faixa atual na mensagem de alteração ---
+            return f"O cliente não está mais dentro da faixa atual ({faixa_atual}). Alteração necessária: {alteracao_necessaria}."
             
     return f"NÃO FOI ENCONTRADA SOLUÇÃO para um kit de {potencia_kit_kwp} kWp com a tensão de {tensao}."
 
@@ -100,14 +103,12 @@ def carregar_dados_tecnicos():
     for df in [df_tensao, df_disjuntores, df_potencia_max]:
         df.columns = [padronizar_nome(col) for col in df.columns]
 
-    # --- CORREÇÃO APLICADA AQUI ---
     # Padroniza os nomes dos municípios no DataFrame para busca case-insensitive
     if 'municipio' in df_tensao.columns:
         df_tensao['municipio'] = df_tensao['municipio'].str.strip().apply(padronizar_nome)
     else:
         st.error("Erro: Coluna 'municipio' não encontrada em `municipios_tensao.csv`.")
         return None, None, None
-    # --- FIM DA CORREÇÃO ---
 
     if 'tensao' in df_tensao.columns: df_tensao['tensao'] = df_tensao['tensao'].astype(str).str.strip().str.replace('V$', '', regex=True)
     if 'tensao' in df_disjuntores.columns: df_disjuntores['tensao'] = df_disjuntores['tensao'].astype(str).str.strip().str.replace('V$', '', regex=True)
