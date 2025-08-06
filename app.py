@@ -178,9 +178,6 @@ if df_dados_tecnicos is not None:
         
         cliente = st.text_input("CLIENTE")
         data_envio = st.date_input("Data do Envio", value=datetime.today())
-        
-        status = st.selectbox("Status do Registro", ["", "Atualizado", "Solicitado Mudança"], help="Selecione o status deste registro.")
-        
         cidade = st.text_input("Cidade")
         fase = st.selectbox("Fase da ligação", ["Monofásico", "Bifásico", "Trifásico"])
         carga_instalada_kw = st.number_input("Carga Instalada (kW)", min_value=0.0, step=0.1, format="%.2f")
@@ -232,17 +229,26 @@ if df_dados_tecnicos is not None:
                 st.info(partes[1])
             else:
                 st.success(instrucao)
-
-        st.header("3. Salvar Registro")
-        salvar_btn = st.form_submit_button("✅ Salvar Registro Completo no Histórico", use_container_width=True)
+        
+        # --- ALTERAÇÃO 1: Nova seção para definir o status e salvar ---
+        st.header("3. Definir Ação e Salvar")
+        
+        # Novas opções de status
+        status_acao = st.selectbox(
+            "Selecione a Ação / Status para este registro:",
+            ["", "Enviar atualização", "Solicitar mudança", "Atualizado"],
+            help="Escolha a ação a ser tomada com base na análise acima."
+        )
+        
+        salvar_btn = st.form_submit_button("✅ Salvar Registro com Status Definido", use_container_width=True)
         
         if salvar_btn:
-            if not status:
-                st.error("ERRO AO SALVAR: Por favor, selecione um 'Status do Registro' antes de salvar.")
+            if not status_acao:
+                st.error("ERRO AO SALVAR: Por favor, selecione uma 'Ação / Status' antes de salvar.")
             else:
                 instrucao_para_salvar = st.session_state.instrucao.replace("__SEPARADOR__", "\n\n")
                 nova_linha = pd.DataFrame([{
-                    "Cliente": cliente, "Data de Envio": data_envio, "Status": status, "Cidade": cidade, "Fase": fase, "Carga Instalada (kW)": carga_instalada_kw,
+                    "Cliente": cliente, "Data de Envio": data_envio, "Status": status_acao, "Cidade": cidade, "Fase": fase, "Carga Instalada (kW)": carga_instalada_kw,
                     "Kit Instalado - Potência": kit_inst_pot, "Kit Instalado - Placa": kit_inst_placa, "Kit Instalado - Inversor": kit_inst_inversor,
                     "Kit Enviado - Potência": kit_env_pot, "Kit Enviado - Placa": kit_env_placa, "Kit Enviado - Inversor": kit_env_inversor,
                     "Kit ATUAL - Potência": kit_atual_pot, "Kit ATUAL - Placa": kit_atual_placa, "Kit ATUAL - Inversor": kit_atual_inversor,
@@ -271,58 +277,35 @@ if os.path.exists("atualizacoes_projetos.csv"):
     else:
         df_filtrado = df_historico[df_historico["Status"] == status_filter]
 
-    # --- ALTERAÇÃO: Nova visualização com st.expander ---
-    for index, row in df_filtrado.iterrows():
-        # Assegura que os valores sejam strings para evitar erros
-        cliente_nome = str(row.get("Cliente", "N/A"))
-        status_valor = str(row.get("Status", "N/A"))
-        
-        # Cria o título do expander
-        expander_title = f"{cliente_nome}  |  Status: {status_valor}"
-        
-        with st.expander(expander_title):
-            st.markdown(f"**Data de Envio:** {row.get('Data de Envio', 'N/A')}")
-            st.markdown(f"**Cidade:** {row.get('Cidade', 'N/A')}")
-            st.markdown(f"**Fase:** {row.get('Fase', 'N/A')}")
-            st.markdown(f"**Carga Instalada (kW):** {row.get('Carga Instalada (kW)', 'N/A')}")
-            
-            st.divider()
-            
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.markdown("**Kit Instalado**")
-                st.text(f"Potência: {row.get('Kit Instalado - Potência', 'N/A')}")
-                st.text(f"Placa: {row.get('Kit Instalado - Placa', 'N/A')}")
-                st.text(f"Inversor: {row.get('Kit Instalado - Inversor', 'N/A')}")
-            with c2:
-                st.markdown("**Kit Enviado**")
-                st.text(f"Potência: {row.get('Kit Enviado - Potência', 'N/A')}")
-                st.text(f"Placa: {row.get('Kit Enviado - Placa', 'N/A')}")
-                st.text(f"Inversor: {row.get('Kit Enviado - Inversor', 'N/A')}")
-            with c3:
-                st.markdown("**Kit ATUAL Instalado**")
-                st.text(f"Potência: {row.get('Kit ATUAL - Potência', 'N/A')}")
-                st.text(f"Placa: {row.get('Kit ATUAL - Placa', 'N/A')}")
-                st.text(f"Inversor: {row.get('Kit ATUAL - Inversor', 'N/A')}")
-            
-            st.divider()
-            
-            st.markdown("**Comentário do Notion:**")
-            st.text(row.get('Comentário Notion', ''))
-            
-            st.markdown("**Instrução da Análise:**")
-            instrucao_texto = str(row.get('Instrução da Análise', ''))
-            
-            # Formata a exibição da instrução
-            if "ERRO" in instrucao_texto:
-                st.error(instrucao_texto)
-            elif "REPROVADO" in instrucao_texto:
-                partes = instrucao_texto.split("\n\n")
-                st.warning(partes[0])
-                if len(partes) > 1:
-                    st.info("\n\n".join(partes[1:]))
-            else:
-                st.success(instrucao_texto)
+    st.info("Você pode editar o status diretamente na tabela abaixo. Após editar, clique no botão 'Salvar Alterações' para confirmar.")
+    
+    edited_df = st.data_editor(
+        df_filtrado,
+        use_container_width=True,
+        hide_index=True,
+        key="history_editor",
+        column_config={
+            "Status": st.column_config.SelectboxColumn(
+                "Status",
+                width="medium",
+                # --- ALTERAÇÃO 2: Atualiza as opções no editor do histórico ---
+                options=["Enviar atualização", "Solicitar mudança", "Atualizado", "N/A"],
+                required=True,
+            ),
+            "Cliente": st.column_config.TextColumn(width="large"),
+            "Instrução da Análise": st.column_config.TextColumn(width="large"),
+            "Kit Instalado - Potência": None, "Kit Instalado - Placa": None, "Kit Instalado - Inversor": None,
+            "Kit Enviado - Potência": None, "Kit Enviado - Placa": None, "Kit Enviado - Inversor": None,
+            "Kit ATUAL - Potência": None, "Kit ATUAL - Placa": None, "Kit ATUAL - Inversor": None,
+            "Comentário Notion": None,
+        }
+    )
+    
+    if st.button("Salvar Alterações no Histórico"):
+        df_historico.update(edited_df)
+        df_historico.to_csv("atualizacoes_projetos.csv", index=False)
+        st.success("Histórico atualizado com sucesso!")
+        st.rerun()
 
 
 st.caption("Desenvolvido por Vitória de Sales Sena ⚡")
