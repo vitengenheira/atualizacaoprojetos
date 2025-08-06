@@ -28,10 +28,10 @@ def parse_potencia_numerica(texto_potencia):
             return None
     return None
 
-# --- FUNÇÃO DE ANÁLISE COM SAÍDA SIMPLIFICADA E CORRIGIDA ---
+# --- FUNÇÃO DE ANÁLISE COM SAÍDA DETALHADA E DIRETA ---
 def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_kwp, df_tensao, df_dados_tecnicos, mapa_ligacao):
     """
-    Analisa os dados e retorna uma instrução simples e direta.
+    Analisa os dados e retorna uma instrução detalhada e direta.
     """
     if not all([cidade, tipo_ligacao, potencia_kit_kwp]):
         return "ERRO: Preencha os campos essenciais para análise (Cidade, Fase, Carga e Potência do Kit ATUAL)."
@@ -56,15 +56,15 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
     faixa_atual = resultado_atual["categoria"]
     limite_atual_str = str(resultado_atual.get('potencia_maxima_geracao_str', 'N/A'))
 
-    # --- ALTERAÇÃO PRINCIPAL: Diagnóstico de erro mais claro ---
-    # Verifica se o limite é um número válido. pd.isna trata None e NaN.
     if pd.isna(limite_atual):
-        return f"ERRO DE DADOS: Não foi possível ler o limite de potência para a faixa '{faixa_atual}' a partir do arquivo CSV. O valor encontrado foi '{limite_atual_str}'. Por favor, corrija o arquivo `tabela_potencia_maxima.csv` para que contenha um número válido (ex: 8.8)."
+        return f"APROVADO: O projeto pode ser atualizado. A faixa atual ({faixa_atual}) não possui um limite de potência definido."
 
     if potencia_kit_kwp <= limite_atual:
-        return f"O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual}), que possui um limite de {limite_atual_str}."
+        return f"APROVADO: O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual}), que possui um limite de {limite_atual_str}."
 
-    # Se chegou aqui, o kit excede o limite. Buscar solução.
+    # Se chegou aqui, o kit excede o limite.
+    reprovado_msg = f"**REPROVADO PARA ATUALIZAÇÃO:** O kit de **{potencia_kit_kwp:.2f} kWp** excede o limite de **{limite_atual_str}** para a categoria atual (`{faixa_atual}`)."
+
     tipos_de_busca = ["Monofásico", "Bifásico", "Trifásico"]
     try:
         indice_inicio_busca = tipos_de_busca.index(tipo_ligacao)
@@ -81,18 +81,29 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
 
         if not df_solucao.empty:
             solucao = df_solucao.iloc[0]
-            nova_faixa, nova_carga_min_w = solucao['categoria'], int(solucao['carga_min_kw'] * 1000)
+            nova_faixa = solucao['categoria']
+            nova_carga_min_kw = solucao['carga_min_kw']
+            nova_carga_max_kw = solucao['carga_max_kw']
+            novo_limite_str = solucao.get('potencia_maxima_geracao_str', 'N/A')
             
-            instrucoes = []
+            # --- ALTERAÇÃO: Montagem da mensagem de solução no formato direto ---
+            solucao_partes = []
+            titulo_solucao = "💡 **Solução Sugerida:**"
             if tipo_busca != tipo_ligacao:
-                instrucoes.append(f"ANTES DE ENVIAR, MUDAR LIGAÇÃO PARA {tipo_busca.upper()}")
+                titulo_solucao = f"💡 **Solução Sugerida (com upgrade de ligação):**"
+            solucao_partes.append(titulo_solucao)
+
+            if tipo_busca != tipo_ligacao:
+                solucao_partes.append(f"É necessário solicitar à concessionária a **alteração para Ligação {tipo_busca}**.")
             
-            instrucoes.append(f"ANTES DE ENVIAR, MUDAR PARA FAIXA {nova_faixa}")
-            instrucoes.append(f"AUMENTAR CARGA PARA {nova_carga_min_w} W")
+            solucao_partes.append(f"**Carga Instalada Necessária:** Entre {nova_carga_min_kw:.2f} kW e {nova_carga_max_kw:.2f} kW.")
+            solucao_partes.append(f"Com a nova categoria (`{nova_faixa}`), o limite de potência do kit será de **{novo_limite_str}**.")
             
-            return "\n".join(instrucoes)
+            solucao_msg = "\n".join(solucao_partes)
             
-    return f"NÃO FOI ENCONTRADA SOLUÇÃO para um kit de {potencia_kit_kwp} kWp com a tensão de {tensao}."
+            return f"{reprovado_msg}__SEPARADOR__{solucao_msg}"
+            
+    return f"{reprovado_msg}__SEPARADOR__NÃO FOI ENCONTRADA SOLUÇÃO para um kit de {potencia_kit_kwp} kWp com a tensão de {tensao}."
 
 # --- Carregamento de Dados ---
 @st.cache_data
@@ -107,15 +118,14 @@ def carregar_dados_tecnicos():
 
     for df in [df_tensao, df_disjuntores, df_potencia_max]:
         df.columns = [padronizar_nome(col) for col in df.columns]
+        if 'tensao' in df.columns:
+            df['tensao'] = df['tensao'].astype(str).str.strip().str.replace('V$', '', regex=True)
 
     if 'municipio' in df_tensao.columns:
         df_tensao['municipio'] = df_tensao['municipio'].str.strip().apply(padronizar_nome)
     else:
         st.error("Erro: Coluna 'municipio' não encontrada em `municipios_tensao.csv`.")
         return None, None, None
-
-    if 'tensao' in df_tensao.columns: df_tensao['tensao'] = df_tensao['tensao'].astype(str).str.strip().str.replace('V$', '', regex=True)
-    if 'tensao' in df_disjuntores.columns: df_disjuntores['tensao'] = df_disjuntores['tensao'].astype(str).str.strip().str.replace('V$', '', regex=True)
 
     def parse_carga_range(range_str):
         if not isinstance(range_str, str) or range_str.strip() == '-': return 0.0, 0.0
@@ -212,10 +222,12 @@ if df_dados_tecnicos is not None:
         
         if st.session_state.instrucao:
             instrucao = st.session_state.instrucao
-            if "ERRO" in instrucao or "NÃO FOI ENCONTRADA" in instrucao:
+            if "ERRO" in instrucao:
                 st.error(instrucao)
-            elif "ANTES DE ENVIAR" in instrucao:
-                st.warning(st.session_state.instrucao)
+            elif "__SEPARADOR__" in instrucao:
+                partes = instrucao.split("__SEPARADOR__")
+                st.error(partes[0])
+                st.info(partes[1])
             else:
                 st.success(instrucao)
 
@@ -223,12 +235,13 @@ if df_dados_tecnicos is not None:
         salvar_btn = st.form_submit_button("✅ Salvar Registro Completo no Histórico", use_container_width=True)
         
         if salvar_btn:
+            instrucao_para_salvar = st.session_state.instrucao.replace("__SEPARADOR__", "\n\n")
             nova_linha = pd.DataFrame([{
                 "Cliente": cliente, "Data de Envio": data_envio, "Cidade": cidade, "Fase": fase, "Carga Instalada (kW)": carga_instalada_kw,
                 "Kit Instalado - Potência": kit_inst_pot, "Kit Instalado - Placa": kit_inst_placa, "Kit Instalado - Inversor": kit_inst_inversor,
                 "Kit Enviado - Potência": kit_env_pot, "Kit Enviado - Placa": kit_env_placa, "Kit Enviado - Inversor": kit_env_inversor,
                 "Kit ATUAL - Potência": kit_atual_pot, "Kit ATUAL - Placa": kit_atual_placa, "Kit ATUAL - Inversor": kit_atual_inversor,
-                "Comentário Notion": comentario_notion, "Instrução da Análise": st.session_state.instrucao
+                "Comentário Notion": comentario_notion, "Instrução da Análise": instrucao_para_salvar
             }])
             salvar_dados_csv(nova_linha)
             st.session_state.instrucao = ""
