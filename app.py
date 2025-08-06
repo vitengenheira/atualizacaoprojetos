@@ -31,14 +31,14 @@ def parse_potencia_numerica(texto_potencia):
 # --- FUNÇÃO DE ANÁLISE ---
 def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para_analise, df_tensao, df_dados_tecnicos, mapa_ligacao):
     """
-    Analisa os dados e retorna uma instrução detalhada e direta.
+    Analisa os dados e retorna uma tupla (instrução, status_sugerido).
     """
     if not all([cidade, tipo_ligacao, potencia_para_analise]):
-        return "ERRO: Preencha os campos essenciais para análise (Cidade, Fase, Carga e Potências do Kit ATUAL)."
+        return ("ERRO: Preencha os campos essenciais para análise (Cidade, Fase, Carga e Potências do Kit ATUAL).", "Erro de Análise")
 
     cidade_norm = padronizar_nome(cidade)
     tensao_info = df_tensao.loc[df_tensao["municipio"] == cidade_norm, "tensao"]
-    if tensao_info.empty: return f"ERRO: Tensão para a cidade '{cidade}' não encontrada."
+    if tensao_info.empty: return (f"ERRO: Tensão para a cidade '{cidade}' não encontrada.", "Erro de Análise")
     tensao = tensao_info.values[0]
 
     categorias_permitidas = mapa_ligacao.get(tipo_ligacao, [])
@@ -49,7 +49,7 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
         (carga_instalada <= df_dados_tecnicos["carga_max_kw"])
     ]
 
-    if df_faixa_encontrada.empty: return f"ERRO: Nenhuma faixa encontrada para os dados atuais (Carga: {carga_instalada}kW, Ligação: {tipo_ligacao})."
+    if df_faixa_encontrada.empty: return (f"ERRO: Nenhuma faixa encontrada para os dados atuais (Carga: {carga_instalada}kW, Ligação: {tipo_ligacao}).", "Erro de Análise")
 
     resultado_atual = df_faixa_encontrada.iloc[0]
     limite_atual = resultado_atual["limite_numerico_busca"]
@@ -57,10 +57,10 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
     limite_atual_str = str(resultado_atual.get('potencia_maxima_geracao_str', 'N/A'))
 
     if pd.isna(limite_atual):
-        return f"APROVADO: O projeto pode ser atualizado. A faixa atual ({faixa_atual}) não possui um limite de potência definido."
+        return (f"APROVADO: O projeto pode ser atualizado. A faixa atual ({faixa_atual}) não possui um limite de potência definido.", "Enviar atualização")
 
     if potencia_para_analise <= limite_atual:
-        return f"APROVADO: O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual}), que possui um limite de {limite_atual_str}."
+        return (f"APROVADO: O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual}), que possui um limite de {limite_atual_str}.", "Enviar atualização")
 
     reprovado_msg = f"**REPROVADO PARA ATUALIZAÇÃO:** A potência considerada (**{potencia_para_analise:.2f} kWp**) excede o limite de **{limite_atual_str}** para a categoria atual (`{faixa_atual}`)."
 
@@ -68,7 +68,7 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
     try:
         indice_inicio_busca = tipos_de_busca.index(tipo_ligacao)
     except ValueError:
-        return f"ERRO: Tipo de ligação '{tipo_ligacao}' inválido."
+        return (f"ERRO: Tipo de ligação '{tipo_ligacao}' inválido.", "Erro de Análise")
 
     for tipo_busca in tipos_de_busca[indice_inicio_busca:]:
         categorias_busca = mapa_ligacao.get(tipo_busca, [])
@@ -91,9 +91,9 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
             solucao_partes.append(f"Com a nova categoria (`{nova_faixa}`), o limite de potência do kit será de **{novo_limite_str}**.")
             
             solucao_msg = "\n".join(solucao_partes)
-            return f"{reprovado_msg}__SEPARADOR__{solucao_msg}"
+            return (f"{reprovado_msg}__SEPARADOR__{solucao_msg}", "Solicitar mudança")
             
-    return f"{reprovado_msg}__SEPARADOR__NÃO FOI ENCONTRADA SOLUÇÃO para um kit de {potencia_para_analise} kWp com a tensão de {tensao}."
+    return (f"{reprovado_msg}__SEPARADOR__NÃO FOI ENCONTRADA SOLUÇÃO para um kit de {potencia_para_analise} kWp com a tensão de {tensao}.", "Erro de Análise")
 
 # --- Carregamento de Dados ---
 @st.cache_data
@@ -156,6 +156,8 @@ def clear_form():
     for k in keys_to_clear:
         del st.session_state[k]
     st.session_state.instrucao = ""
+    st.session_state.status_sugerido = ""
+
 
 # --- Interface Principal do App ---
 st.title("⚙️ Gestor de Atualizações de Projetos")
@@ -165,6 +167,9 @@ if 'edit_index' not in st.session_state:
     st.session_state.edit_index = None
 if 'instrucao' not in st.session_state:
     st.session_state.instrucao = ""
+if 'status_sugerido' not in st.session_state:
+    st.session_state.status_sugerido = ""
+
 
 df_tensao, df_dados_tecnicos, mapa_ligacao = carregar_dados_tecnicos()
 
@@ -207,9 +212,6 @@ if df_dados_tecnicos is not None:
             
             # --- Análise e Ação ---
             st.subheader("2. Análise e Ação")
-            status_options = ["", "Enviar atualização", "Solicitar mudança", "Atualizado"]
-            status_index = status_options.index(st.session_state.get('edit_Status', ''))
-            status_acao = st.selectbox("Status / Ação", status_options, index=status_index)
             
             submitted = st.form_submit_button("Analisar e Salvar", use_container_width=True, type="primary")
 
@@ -219,20 +221,20 @@ if df_dados_tecnicos is not None:
 
                 if not pot_kit or not pot_inv:
                     st.error("Potência do Kit ATUAL e do Inversor devem ser números válidos para análise.")
-                elif not status_acao:
-                    st.error("Por favor, selecione um 'Status / Ação' antes de salvar.")
                 else:
                     potencia_para_analise = min(pot_kit, pot_inv)
                     st.info(f"Análise considera a menor potência entre o kit ({pot_kit} kWp) e o inversor ({pot_inv} kWp): **{potencia_para_analise} kWp**")
                     
-                    instrucao = gerar_instrucao_tecnica(cidade, fase, carga_instalada_kw, potencia_para_analise, df_tensao, df_dados_tecnicos, mapa_ligacao)
+                    # --- ALTERAÇÃO: Captura a instrução e o status sugerido ---
+                    instrucao, status_sugerido = gerar_instrucao_tecnica(cidade, fase, carga_instalada_kw, potencia_para_analise, df_tensao, df_dados_tecnicos, mapa_ligacao)
                     st.session_state.instrucao = instrucao
+                    st.session_state.status_sugerido = status_sugerido
                     
                     # Salvar dados
                     df_historico = pd.read_csv("atualizacoes_projetos.csv") if os.path.exists("atualizacoes_projetos.csv") else pd.DataFrame()
                     
                     novo_registro = {
-                        "Cliente": cliente, "Data de Envio": data_envio.strftime('%Y-%m-%d'), "Status": status_acao, "Cidade": cidade, "Fase": fase, "Carga Instalada (kW)": carga_instalada_kw,
+                        "Cliente": cliente, "Data de Envio": data_envio.strftime('%Y-%m-%d'), "Status": status_sugerido, "Cidade": cidade, "Fase": fase, "Carga Instalada (kW)": carga_instalada_kw,
                         "Kit Instalado - Potência": kit_inst_pot, "Kit Instalado - Placa": kit_inst_placa, "Kit Instalado - Inversor": kit_inst_inversor,
                         "Kit Enviado - Potência": kit_env_pot, "Kit Enviado - Placa": kit_env_placa, "Kit Enviado - Inversor": kit_env_inversor,
                         "Kit ATUAL - Potência": kit_atual_pot, "Kit ATUAL - Placa": kit_atual_placa, "Kit ATUAL - Inversor": kit_atual_inversor,
@@ -247,9 +249,10 @@ if df_dados_tecnicos is not None:
                         st.success("Novo registro salvo com sucesso!")
                     
                     df_historico.to_csv("atualizacoes_projetos.csv", index=False)
-                    clear_form()
+                    # Não limpa o formulário imediatamente para o usuário ver o resultado
                     st.rerun()
 
+    # --- Exibição dos resultados fora do formulário ---
     if st.session_state.instrucao:
         instrucao = st.session_state.instrucao
         if "ERRO" in instrucao: st.error(instrucao)
@@ -257,6 +260,11 @@ if df_dados_tecnicos is not None:
             partes = instrucao.split("__SEPARADOR__")
             st.error(partes[0]); st.info(partes[1])
         else: st.success(instrucao)
+        
+        # Exibe o status que foi salvo
+        if st.session_state.status_sugerido not in ["", "Erro de Análise"]:
+            st.success(f"**Status definido e salvo automaticamente:** {st.session_state.status_sugerido}")
+
 
 # --- Visualização do Histórico ---
 st.divider()
@@ -277,7 +285,6 @@ if os.path.exists("atualizacoes_projetos.csv"):
 
     df_filtrado = df_historico if status_filter == "Todos" else df_historico[df_historico["Status"] == status_filter]
 
-    # --- ALTERAÇÃO: Nova visualização com st.expander ---
     for index, row in df_filtrado.iterrows():
         cliente_nome = str(row.get("Cliente", "N/A"))
         status_valor = str(row.get("Status", "N/A"))
@@ -285,7 +292,6 @@ if os.path.exists("atualizacoes_projetos.csv"):
         expander_title = f"{cliente_nome}  |  Status: {status_valor}"
         
         with st.expander(expander_title):
-            # Botão de edição dentro do expander
             st.button("Carregar para Edição", key=f"edit_{index}", on_click=load_record_for_edit, args=(df_historico, index))
             
             st.markdown(f"**Data de Envio:** {row.get('Data de Envio', 'N/A')}")
@@ -333,3 +339,4 @@ else:
     st.info("Nenhum registro encontrado. Adicione um novo registro no formulário acima.")
 
 st.caption("Desenvolvido por Vitória de Sales Sena ⚡")
+
