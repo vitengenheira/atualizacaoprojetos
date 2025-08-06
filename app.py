@@ -28,7 +28,7 @@ def parse_potencia_numerica(texto_potencia):
             return None
     return None
 
-# --- FUNÇÃO DE ANÁLISE COM SAÍDA SIMPLIFICADA ---
+# --- FUNÇÃO DE ANÁLISE COM SAÍDA SIMPLIFICADA E CORRIGIDA ---
 def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_kwp, df_tensao, df_dados_tecnicos, mapa_ligacao):
     """
     Analisa os dados e retorna uma instrução simples e direta.
@@ -54,13 +54,16 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
     resultado_atual = df_faixa_encontrada.iloc[0]
     limite_atual = resultado_atual["limite_numerico_busca"]
     faixa_atual = resultado_atual["categoria"]
-    # --- ALTERAÇÃO: Captura o limite como texto para exibição ---
     limite_atual_str = str(resultado_atual.get('potencia_maxima_geracao_str', 'N/A'))
 
-    if limite_atual is None or potencia_kit_kwp <= limite_atual:
-        # Adiciona a faixa e o limite na mensagem de sucesso
+    # CORREÇÃO: Verifica se o limite é um número válido. pd.isna trata None e NaN.
+    if pd.isna(limite_atual):
+        return f"O projeto pode ser atualizado. A faixa atual ({faixa_atual}) não possui um limite de potência definido."
+
+    if potencia_kit_kwp <= limite_atual:
         return f"O projeto pode ser atualizado. O cliente se mantém na faixa atual ({faixa_atual}), que possui um limite de {limite_atual_str}."
 
+    # Se chegou aqui, o kit excede o limite. Buscar solução.
     tipos_de_busca = ["Monofásico", "Bifásico", "Trifásico"]
     try:
         indice_inicio_busca = tipos_de_busca.index(tipo_ligacao)
@@ -79,15 +82,15 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_kit_
             solucao = df_solucao.iloc[0]
             nova_faixa, nova_carga_min_w = solucao['categoria'], int(solucao['carga_min_kw'] * 1000)
             
-            partes_alteracao = []
+            # --- ALTERAÇÃO: Formato de saída direto como solicitado ---
+            instrucoes = []
             if tipo_busca != tipo_ligacao:
-                partes_alteracao.append(f"MUDAR LIGAÇÃO PARA {tipo_busca.upper()}")
-            partes_alteracao.append(f"MUDAR PARA FAIXA {nova_faixa}")
-            partes_alteracao.append(f"AUMENTAR CARGA PARA NO MÍNIMO {nova_carga_min_w} W")
+                instrucoes.append(f"ANTES DE ENVIAR, MUDAR LIGAÇÃO PARA {tipo_busca.upper()}")
             
-            alteracao_necessaria = " e ".join(partes_alteracao)
-            # Adiciona a faixa e o limite na mensagem de alteração
-            return f"O cliente não está mais dentro da faixa atual ({faixa_atual}), que tem um limite de {limite_atual_str}. Alteração necessária: {alteracao_necessaria}."
+            instrucoes.append(f"ANTES DE ENVIAR, MUDAR PARA FAIXA {nova_faixa}")
+            instrucoes.append(f"AUMENTAR CARGA PARA {nova_carga_min_w} W")
+            
+            return "\n".join(instrucoes)
             
     return f"NÃO FOI ENCONTRADA SOLUÇÃO para um kit de {potencia_kit_kwp} kWp com a tensão de {tensao}."
 
@@ -105,7 +108,6 @@ def carregar_dados_tecnicos():
     for df in [df_tensao, df_disjuntores, df_potencia_max]:
         df.columns = [padronizar_nome(col) for col in df.columns]
 
-    # Padroniza os nomes dos municípios no DataFrame para busca case-insensitive
     if 'municipio' in df_tensao.columns:
         df_tensao['municipio'] = df_tensao['municipio'].str.strip().apply(padronizar_nome)
     else:
@@ -136,7 +138,7 @@ def carregar_dados_tecnicos():
     coluna_pot = [col for col in df_dados_tecnicos.columns if 'potencia_maxima' in col]
     if coluna_pot:
         df_dados_tecnicos.rename(columns={coluna_pot[0]: 'potencia_maxima_geracao_str'}, inplace=True)
-        df_dados_tecnicos['limite_numerico_busca'] = df_dados_tecnicos['potencia_maxima_geracao_str'].apply(lambda x: float(str(x).replace(',','.')) if isinstance(x, str) and re.search(r'\d', x) else None)
+        df_dados_tecnicos['limite_numerico_busca'] = df_dados_tecnicos['potencia_maxima_geracao_str'].apply(parse_potencia_numerica)
     else:
         st.error("Erro: Coluna de potência máxima não encontrada em `tabela_potencia_maxima.csv`.")
         return None, None, None
@@ -165,7 +167,6 @@ if df_dados_tecnicos is not None:
     with st.form("form_registro_e_analise"):
         st.header("1. Dados para Registro")
         
-        # --- CAMPOS DE REGISTRO ---
         cliente = st.text_input("CLIENTE")
         data_envio = st.date_input("Data do Envio", value=datetime.today())
         cidade = st.text_input("Cidade")
@@ -193,11 +194,9 @@ if df_dados_tecnicos is not None:
         st.divider()
         comentario_notion = st.text_area("Comentário do Notion")
         
-        # --- SEÇÃO DE ANÁLISE ---
         st.header("2. Análise de Conformidade")
         st.info("A análise usará os campos: Cidade, Fase, Carga Instalada e a Potência do Kit ATUAL.")
         
-        # Botão de análise
         analisar_btn = st.form_submit_button("Analisar Conformidade do Kit ATUAL")
 
         if 'instrucao' not in st.session_state:
@@ -211,17 +210,15 @@ if df_dados_tecnicos is not None:
                     df_tensao, df_dados_tecnicos, mapa_ligacao
                 )
         
-        # Exibe o resultado da análise
         if st.session_state.instrucao:
             instrucao = st.session_state.instrucao
             if "ERRO" in instrucao or "NÃO FOI ENCONTRADA" in instrucao:
                 st.error(instrucao)
-            elif "não está mais dentro da faixa" in instrucao:
-                st.warning(instrucao)
+            elif "ANTES DE ENVIAR" in instrucao:
+                st.warning(st.session_state.instrucao)
             else:
                 st.success(instrucao)
 
-        # --- SEÇÃO DE SALVAMENTO ---
         st.header("3. Salvar Registro")
         salvar_btn = st.form_submit_button("✅ Salvar Registro Completo no Histórico", use_container_width=True)
         
@@ -234,9 +231,8 @@ if df_dados_tecnicos is not None:
                 "Comentário Notion": comentario_notion, "Instrução da Análise": st.session_state.instrucao
             }])
             salvar_dados_csv(nova_linha)
-            st.session_state.instrucao = "" # Limpa a instrução para o próximo registro
+            st.session_state.instrucao = ""
 
-# --- Visualização do Histórico ---
 if os.path.exists("atualizacoes_projetos.csv"):
     st.divider()
     st.header("📋 Histórico de Atualizações")
