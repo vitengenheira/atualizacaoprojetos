@@ -82,13 +82,20 @@ def gerar_instrucao_tecnica(cidade, tipo_ligacao, carga_instalada, potencia_para
             solucao = df_solucao.iloc[0]
             nova_faixa, nova_carga_min_kw, nova_carga_max_kw, novo_limite_str = solucao['categoria'], solucao['carga_min_kw'], solucao['carga_max_kw'], solucao.get('potencia_maxima_geracao_str', 'N/A')
             
-            solucao_partes = ["💡 **Solução Sugerida:**"]
+            # --- ALTERAÇÃO: Formato da mensagem de solução mais claro e acionável ---
+            solucao_partes = []
             if tipo_busca != tipo_ligacao:
-                solucao_partes[0] = f"💡 **Solução Sugerida (com upgrade de ligação):**"
-                solucao_partes.append(f"É necessário solicitar à concessionária a **alteração para Ligação {tipo_busca}**.")
+                titulo_solucao = f"💡 **Solução Sugerida (com upgrade de ligação):**"
+                solucao_partes.append(titulo_solucao)
+                solucao_partes.append(f"1. **Solicitar à concessionária a alteração para Ligação {tipo_busca}**.")
+                solucao_partes.append(f"2. **Adequar a Carga Instalada** para a faixa entre {nova_carga_min_kw:.2f} kW e {nova_carga_max_kw:.2f} kW (correspondente à nova categoria `{nova_faixa}`).")
+            else: # Mesmo tipo de ligação, só muda a categoria
+                titulo_solucao = "💡 **Solução Sugerida:**"
+                solucao_partes.append(titulo_solucao)
+                solucao_partes.append(f"1. **Mudar a categoria do projeto para `{nova_faixa}`**.")
+                solucao_partes.append(f"2. **Adequar a Carga Instalada** para a nova faixa de {nova_carga_min_kw:.2f} kW a {nova_carga_max_kw:.2f} kW.")
             
-            solucao_partes.append(f"**Carga Instalada Necessária:** Entre {nova_carga_min_kw:.2f} kW e {nova_carga_max_kw:.2f} kW.")
-            solucao_partes.append(f"Com a nova categoria (`{nova_faixa}`), o limite de potência do kit será de **{novo_limite_str}**.")
+            solucao_partes.append(f"Com esta alteração, o novo limite de potência do kit será de **{novo_limite_str}**.")
             
             solucao_msg = "\n".join(solucao_partes)
             return (f"{reprovado_msg}__SEPARADOR__{solucao_msg}", "Solicitar mudança")
@@ -225,12 +232,10 @@ if df_dados_tecnicos is not None:
                     potencia_para_analise = min(pot_kit, pot_inv)
                     st.info(f"Análise considera a menor potência entre o kit ({pot_kit} kWp) e o inversor ({pot_inv} kWp): **{potencia_para_analise} kWp**")
                     
-                    # --- ALTERAÇÃO: Captura a instrução e o status sugerido ---
                     instrucao, status_sugerido = gerar_instrucao_tecnica(cidade, fase, carga_instalada_kw, potencia_para_analise, df_tensao, df_dados_tecnicos, mapa_ligacao)
                     st.session_state.instrucao = instrucao
                     st.session_state.status_sugerido = status_sugerido
                     
-                    # Salvar dados
                     df_historico = pd.read_csv("atualizacoes_projetos.csv") if os.path.exists("atualizacoes_projetos.csv") else pd.DataFrame()
                     
                     novo_registro = {
@@ -249,7 +254,6 @@ if df_dados_tecnicos is not None:
                         st.success("Novo registro salvo com sucesso!")
                     
                     df_historico.to_csv("atualizacoes_projetos.csv", index=False)
-                    # Não limpa o formulário imediatamente para o usuário ver o resultado
                     st.rerun()
 
     # --- Exibição dos resultados fora do formulário ---
@@ -261,7 +265,6 @@ if df_dados_tecnicos is not None:
             st.error(partes[0]); st.info(partes[1])
         else: st.success(instrucao)
         
-        # Exibe o status que foi salvo
         if st.session_state.status_sugerido not in ["", "Erro de Análise"]:
             st.success(f"**Status definido e salvo automaticamente:** {st.session_state.status_sugerido}")
 
@@ -339,4 +342,3 @@ else:
     st.info("Nenhum registro encontrado. Adicione um novo registro no formulário acima.")
 
 st.caption("Desenvolvido por Vitória de Sales Sena ⚡")
-
